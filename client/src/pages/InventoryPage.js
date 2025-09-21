@@ -11,17 +11,20 @@ export default function InventoryPage() {
     name: "",
     category: "",
     description: "",
-    batchNo: "",
     quantity: 0,
-    price: 0
+    price: 0,
   });
   const [editingId, setEditingId] = useState(null);
 
-  useEffect(() => { fetchItems(); }, []);
+  useEffect(() => {
+    fetchItems();
+  }, []);
 
   async function fetchItems() {
     const token = localStorage.getItem("token");
-    const r = await fetch(`${API}/inventory`, { headers: { Authorization: `Bearer ${token}` } });
+    const r = await fetch(`${API}/inventory`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
     if (r.ok) setItems(await r.json());
   }
 
@@ -36,12 +39,15 @@ export default function InventoryPage() {
 
     const r = await fetch(url, {
       method,
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify(form)
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(form),
     });
 
     if (r.ok) {
-      setForm({ name: "", category: "", description: "", batchNo: "", quantity: 0, price: 0 });
+      setForm({ name: "", category: "", description: "", quantity: 0, price: 0 });
       setEditingId(null);
       fetchItems();
     } else {
@@ -55,15 +61,14 @@ export default function InventoryPage() {
       name: item.name,
       category: item.category,
       description: item.description,
-      batchNo: item.batchNo,
       quantity: item.quantity,
-      price: item.price
+      price: item.price,
     });
     setEditingId(item.id);
   }
 
   function cancelEdit() {
-    setForm({ name: "", category: "", description: "", batchNo: "", quantity: 0, price: 0 });
+    setForm({ name: "", category: "", description: "", quantity: 0, price: 0 });
     setEditingId(null);
   }
 
@@ -72,7 +77,7 @@ export default function InventoryPage() {
     const token = localStorage.getItem("token");
     const r = await fetch(`${API}/inventory/${id}`, {
       method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` }
+      headers: { Authorization: `Bearer ${token}` },
     });
     if (r.ok) fetchItems();
   }
@@ -92,19 +97,19 @@ export default function InventoryPage() {
                 <thead className="bg-slate-100 text-slate-600 text-sm">
                   <tr>
                     <th className="py-2 px-3">Name</th>
-                    <th className="py-2 px-3">Batch</th>
                     <th className="py-2 px-3">Qty</th>
                     <th className="py-2 px-3">Price</th>
                     <th className="py-2 px-3">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map(i => (
+                  {items.map((i) => (
                     <tr key={i.id} className="border-t">
                       <td className="py-2 px-3">{i.name}</td>
-                      <td className="py-2 px-3">{i.batchNo}</td>
                       <td className="py-2 px-3">{i.quantity}</td>
-                      <td className="py-2 px-3">₱{Number(i.price).toFixed(2)}</td>
+                      <td className="py-2 px-3">
+                        ₱{Number(i.price).toFixed(2)}
+                      </td>
                       <td className="py-2 px-3 flex gap-2">
                         {user?.role === "admin" && (
                           <>
@@ -127,7 +132,7 @@ export default function InventoryPage() {
                   ))}
                   {!items.length && (
                     <tr>
-                      <td colSpan="5" className="py-3 text-center text-slate-500">
+                      <td colSpan="4" className="py-3 text-center text-slate-500">
                         No products
                       </td>
                     </tr>
@@ -147,48 +152,58 @@ export default function InventoryPage() {
                 className="w-full border rounded px-3 py-2"
                 placeholder="Name"
                 value={form.name}
-                onChange={e => setForm({ ...form, name: e.target.value })}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
                 required
               />
               <input
                 className="w-full border rounded px-3 py-2"
                 placeholder="Category"
                 value={form.category}
-                onChange={e => setForm({ ...form, category: e.target.value })}
-              />
-              <input
-                className="w-full border rounded px-3 py-2"
-                placeholder="Batch No"
-                value={form.batchNo}
-                onChange={e => setForm({ ...form, batchNo: e.target.value })}
+                onChange={(e) => setForm({ ...form, category: e.target.value })}
               />
               <textarea
                 className="w-full border rounded px-3 py-2"
                 placeholder="Description"
                 value={form.description}
-                onChange={e => setForm({ ...form, description: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, description: e.target.value })
+                }
               />
 
               {/* Quantity & Price with labels */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-1">Quantity</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">
+                    Quantity
+                  </label>
                   <input
                     type="number"
                     className="w-full border rounded px-3 py-2"
                     value={form.quantity}
                     min={0}
-                    onChange={e => setForm({ ...form, quantity: parseInt(e.target.value || 0) })}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        quantity: parseInt(e.target.value || 0),
+                      })
+                    }
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-1">Price</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">
+                    Price
+                  </label>
                   <input
                     type="number"
                     step="0.01"
                     className="w-full border rounded px-3 py-2"
                     value={form.price}
-                    onChange={e => setForm({ ...form, price: parseFloat(e.target.value || 0) })}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        price: parseFloat(e.target.value || 0),
+                      })
+                    }
                   />
                 </div>
               </div>

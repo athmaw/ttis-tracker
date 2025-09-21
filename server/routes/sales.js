@@ -1,16 +1,17 @@
 const express = require("express");
+const multer = require("multer");
+const xlsx = require("xlsx");
+const { Sale, Item, sequelize } = require("../models");
+
 const router = express.Router();
-const { Sale, Item } = require("../models");
+const upload = multer({ dest: "uploads/" });
 
 router.get("/", async (req, res) => {
   try {
-    const sales = await Sale.findAll({
-      include: [{ model: Item, attributes: ["id", "name"] }],
-      order: [["createdAt", "DESC"]],
-    });
+    const sales = await Sale.findAll({ include: [Item], order: [["date", "DESC"]] });
     res.json(sales);
   } catch (err) {
-    console.error("Error fetching sales:", err);
+    console.error(err);
     res.status(500).json({ message: "Failed to fetch sales" });
   }
 });
@@ -18,109 +19,134 @@ router.get("/", async (req, res) => {
 router.post("/", async (req, res) => {
   try {
     const { itemId, quantity, customer } = req.body;
-    if (!itemId || !quantity) {
-      return res.status(400).json({ message: "Item and quantity are required" });
-    }
-
     const item = await Item.findByPk(itemId);
     if (!item) return res.status(404).json({ message: "Item not found" });
-
-    if (item.quantity < quantity) {
-      return res.status(400).json({ message: "Not enough stock available" });
-    }
-
-    item.quantity -= quantity;
-    await item.save();
 
     const totalPrice = quantity * item.price;
 
     const sale = await Sale.create({
       itemId,
       quantity,
-      customer,
       totalPrice,
-      date: new Date().toISOString().slice(0, 10),
+      customer,
+      date: new Date(),
     });
+
+    item.quantity -= quantity;
+    await item.save();
 
     res.json(sale);
   } catch (err) {
-    console.error("Error creating sale:", err);
+    console.error(err);
     res.status(500).json({ message: "Failed to create sale" });
   }
 });
 
 router.put("/:id", async (req, res) => {
   try {
-    const { id } = req.params;
-    const { itemId, quantity, customer } = req.body;
-
-    const sale = await Sale.findByPk(id);
+    const sale = await Sale.findByPk(req.params.id);
     if (!sale) return res.status(404).json({ message: "Sale not found" });
 
+    const { itemId, quantity, customer } = req.body;
     const item = await Item.findByPk(itemId);
     if (!item) return res.status(404).json({ message: "Item not found" });
 
-    const prevItem = await Item.findByPk(sale.itemId);
-    if (prevItem) {
-      prevItem.quantity += sale.quantity;
-      await prevItem.save();
-    }
+    const totalPrice = quantity * item.price;
 
-    if (item.quantity < quantity) {
-      return res.status(400).json({ message: "Not enough stock available" });
-    }
-    item.quantity -= quantity;
-    await item.save();
-
-    sale.itemId = itemId;
-    sale.quantity = quantity;
-    sale.customer = customer;
-    sale.totalPrice = quantity * item.price;
-    await sale.save();
-
+    await sale.update({ itemId, quantity, totalPrice, customer });
     res.json(sale);
   } catch (err) {
-    console.error("Error updating sale:", err);
+    console.error(err);
     res.status(500).json({ message: "Failed to update sale" });
   }
 });
 
 router.delete("/:id", async (req, res) => {
   try {
-    const { id } = req.params;
-    const sale = await Sale.findByPk(id);
+    const sale = await Sale.findByPk(req.params.id);
     if (!sale) return res.status(404).json({ message: "Sale not found" });
 
-    const item = await Item.findByPk(sale.itemId);
-    if (item) {
-      item.quantity += sale.quantity; // return stock
-      await item.save();
+    await sale.destroy();
+    res.json({ message: "Sale deleted" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to delete sale" });
+  }
+});
+
+router.post("/upload", upload.single("file"), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+
+    const workbook = xlsx.readFile(req.file.path, { cellDates: true });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = xlsx.utils.sheet_to_json(sheet);
+
+    const excelSerialToJSDate = (serial) => {
+      return new Date(Math.round((serial - 25569) * 86400 * 1000));
+    };
+
+    for (const row of rows) {
+      const itemName = row.Item;
+      const qty = Number(row.Quantity) || 0;
+      const price = Number(row.Price) || 0;
+      const customer = row.Customer || "";
+
+      let saleDate;
+      if (row.Date === undefined || row.Date === null || row.Date === "") {
+        saleDate = new Date();
+      } else if (row.Date instanceof Date) {
+        saleDate = row.Date;
+      } else if (typeof row.Date === "number") {
+        saleDate = excelSerialToJSDate(row.Date);
+      } else {
+        const parsed = new Date(row.Date);
+        if (!isNaN(parsed.getTime())) saleDate = parsed;
+        else saleDate = new Date(); 
+      }
+
+      let item = await Item.findOne({ where: { name: itemName } });
+      if (!item) {
+        item = await Item.create({
+          name: itemName,
+          quantity: 0,
+          price: price || 0,
+        });
+        console.log(`Created new item: ${itemName}`);
+      }
+
+      await Sale.create({
+        itemId: item.id,
+        quantity: qty,
+        totalPrice: price,
+        customer,
+        date: saleDate,
+      });
+
+      console.log(`Added sale: item=${itemName} qty=${qty} date=${saleDate.toISOString().slice(0,10)}`);
     }
 
-    await sale.destroy();
-    res.json({ message: "Sale deleted successfully" });
+    res.json({ message: "File uploaded and sales added successfully" });
   } catch (err) {
-    console.error("Error deleting sale:", err);
-    res.status(500).json({ message: "Failed to delete sale" });
+    console.error("Upload error:", err);
+    res.status(500).json({ message: "Failed to upload sales" });
   }
 });
 
 router.get("/reports/monthly", async (req, res) => {
   try {
-    const { Sale, sequelize } = require("../models");
-
-    const monthlySales = await Sale.findAll({
+    const results = await Sale.findAll({
       attributes: [
-        [sequelize.fn("strftime", "%Y-%m", sequelize.col("date")), "month"], // works in SQLite
-        [sequelize.fn("sum", sequelize.col("totalPrice")), "total"],
+        [sequelize.fn("strftime", "%Y-%m", sequelize.col("date")), "month"], // SQLite
+        [sequelize.fn("SUM", sequelize.col("totalPrice")), "total"],
       ],
       group: ["month"],
-      order: [[sequelize.fn("strftime", "%Y-%m", sequelize.col("date")), "DESC"]],
+      order: [[sequelize.literal("month"), "DESC"]],
     });
 
-    res.json(monthlySales);
+    res.json(results);
   } catch (err) {
-    console.error("Error fetching monthly sales:", err);
+    console.error("Monthly sales error:", err);
     res.status(500).json({ message: "Failed to fetch monthly sales" });
   }
 });

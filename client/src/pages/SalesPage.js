@@ -8,6 +8,7 @@ export default function SalesPage() {
   const [form, setForm] = useState({ itemId: "", quantity: 1, customer: "" });
   const [sales, setSales] = useState([]);
   const [editingId, setEditingId] = useState(null);
+  const [file, setFile] = useState(null);
 
   useEffect(() => { fetchItems(); fetchSales(); }, []);
 
@@ -67,6 +68,34 @@ export default function SalesPage() {
     if (r.ok) fetchSales();
   }
 
+  // --- Excel Upload ---
+  const handleFileChange = (e) => {
+    setFile(e.target.files[0]);
+  };
+
+  async function handleUpload() {
+    if (!file) return alert("Please select an Excel file first");
+
+    const token = localStorage.getItem("token");
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const r = await fetch(`${API}/sales/upload`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData
+      });
+      if (!r.ok) throw new Error("Upload failed");
+      alert("Sales imported successfully!");
+      setFile(null);
+      fetchSales();
+    } catch (err) {
+      console.error("Upload error:", err);
+      alert("Failed to import sales");
+    }
+  }
+
   return (
     <div>
       <NavBar />
@@ -111,6 +140,25 @@ export default function SalesPage() {
           </form>
         </div>
 
+        {/* Excel Upload */}
+        <div className="card mt-4">
+          <h3 className="font-medium mb-2">Upload Sales (Excel)</h3>
+          <div className="flex flex-col md:flex-row gap-3 items-center">
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={handleFileChange}
+              className="border p-2 rounded w-full md:w-auto"
+            />
+            <button
+              onClick={handleUpload}
+              className="bg-emerald-600 text-white px-4 py-2 rounded"
+            >
+              Upload
+            </button>
+          </div>
+        </div>
+
         {/* Recent sales */}
         <div className="card mt-4">
           <h3 className="font-medium mb-2">Recent sales</h3>
@@ -130,7 +178,6 @@ export default function SalesPage() {
                 {sales.map(s => (
                   <tr key={s.id} className="border-t">
                     <td className="py-2 px-3">{s.date}</td>
-                    {/* ✅ Show item name */}
                     <td className="py-2 px-3">{s.Item?.name || "—"}</td>
                     <td className="py-2 px-3">{s.quantity}</td>
                     <td className="py-2 px-3">₱{Number(s.totalPrice).toFixed(2)}</td>

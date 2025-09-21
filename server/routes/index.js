@@ -1,11 +1,8 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const auth = require('./auth');
-const inventory = require('./inventory');
-const sales = require('./sales');
 
-router.use('/auth', auth);
-router.use('/inventory', inventory);
-router.use('/sales', sales);
+router.use("/auth", require("./auth"));
+router.use("/inventory", require("./inventory"));
+router.use("/sales", require("./sales"));
 
 module.exports = router;

@@ -28,7 +28,6 @@ const Item = sequelize.define('Item', {
   name: { type: DataTypes.STRING, allowNull: false },
   category: { type: DataTypes.STRING },
   description: { type: DataTypes.TEXT },
-  batchNo: { type: DataTypes.STRING },
   quantity: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
   price: { type: DataTypes.FLOAT, allowNull: false, defaultValue: 0.0 }
 });
