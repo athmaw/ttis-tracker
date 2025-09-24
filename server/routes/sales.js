@@ -6,9 +6,13 @@ const { Sale, Item, sequelize } = require("../models");
 const router = express.Router();
 const upload = multer({ dest: "uploads/" });
 
+// Get all sales
 router.get("/", async (req, res) => {
   try {
-    const sales = await Sale.findAll({ include: [Item], order: [["date", "DESC"]] });
+    const sales = await Sale.findAll({
+      include: [Item],
+      order: [["date", "DESC"]],
+    });
     res.json(sales);
   } catch (err) {
     console.error(err);
@@ -16,6 +20,7 @@ router.get("/", async (req, res) => {
   }
 });
 
+// Create sale
 router.post("/", async (req, res) => {
   try {
     const { itemId, quantity, customer } = req.body;
@@ -42,6 +47,7 @@ router.post("/", async (req, res) => {
   }
 });
 
+// Update sale
 router.put("/:id", async (req, res) => {
   try {
     const sale = await Sale.findByPk(req.params.id);
@@ -61,6 +67,7 @@ router.put("/:id", async (req, res) => {
   }
 });
 
+// Delete sale
 router.delete("/:id", async (req, res) => {
   try {
     const sale = await Sale.findByPk(req.params.id);
@@ -74,7 +81,8 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
-router.post("/upload", upload.single("file"), async (req, res) => {
+// Upload sales via Excel
+router.post("/upload-excel", upload.single("file"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
@@ -82,9 +90,8 @@ router.post("/upload", upload.single("file"), async (req, res) => {
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const rows = xlsx.utils.sheet_to_json(sheet);
 
-    const excelSerialToJSDate = (serial) => {
-      return new Date(Math.round((serial - 25569) * 86400 * 1000));
-    };
+    const excelSerialToJSDate = (serial) =>
+      new Date(Math.round((serial - 25569) * 86400 * 1000));
 
     for (const row of rows) {
       const itemName = row.Item;
@@ -92,8 +99,9 @@ router.post("/upload", upload.single("file"), async (req, res) => {
       const price = Number(row.Price) || 0;
       const customer = row.Customer || "";
 
+      // Parse Date properly
       let saleDate;
-      if (row.Date === undefined || row.Date === null || row.Date === "") {
+      if (!row.Date) {
         saleDate = new Date();
       } else if (row.Date instanceof Date) {
         saleDate = row.Date;
@@ -101,10 +109,10 @@ router.post("/upload", upload.single("file"), async (req, res) => {
         saleDate = excelSerialToJSDate(row.Date);
       } else {
         const parsed = new Date(row.Date);
-        if (!isNaN(parsed.getTime())) saleDate = parsed;
-        else saleDate = new Date(); 
+        saleDate = isNaN(parsed.getTime()) ? new Date() : parsed;
       }
 
+      // Ensure Item exists
       let item = await Item.findOne({ where: { name: itemName } });
       if (!item) {
         item = await Item.create({
@@ -115,15 +123,18 @@ router.post("/upload", upload.single("file"), async (req, res) => {
         console.log(`Created new item: ${itemName}`);
       }
 
+      // Save sale with correct total
       await Sale.create({
         itemId: item.id,
         quantity: qty,
-        totalPrice: price,
+        totalPrice: qty * price,
         customer,
         date: saleDate,
       });
 
-      console.log(`Added sale: item=${itemName} qty=${qty} date=${saleDate.toISOString().slice(0,10)}`);
+      console.log(
+        `✅ Added sale: ${itemName} x${qty} (₱${qty * price}) on ${saleDate.toISOString().slice(0, 10)}`
+      );
     }
 
     res.json({ message: "File uploaded and sales added successfully" });
@@ -133,6 +144,7 @@ router.post("/upload", upload.single("file"), async (req, res) => {
   }
 });
 
+// Monthly sales report
 router.get("/reports/monthly", async (req, res) => {
   try {
     const results = await Sale.findAll({

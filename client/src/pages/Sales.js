@@ -42,10 +42,10 @@ export default function Sales(){
         </div>
         <div><input type="number" value={form.quantity} min="1" onChange={e=>setForm({...form, quantity:parseInt(e.target.value||1)})} required /></div>
         <div><input placeholder="Customer" value={form.customer} onChange={e=>setForm({...form, customer:e.target.value})} /></div>
-        <div><button type="submit">Record sale</button></div>
+        <div><button type="submit">Record Sale</button></div>
       </form>
 
-      <h3 style={{marginTop:20}}>Recent sales</h3>
+      <h3 style={{marginTop:20}}>Recent Sale</h3>
       <table border="1" cellPadding="6">
         <thead><tr><th>Date</th><th>Item</th><th>Qty</th><th>Total</th><th>Customer</th></tr></thead>
         <tbody>

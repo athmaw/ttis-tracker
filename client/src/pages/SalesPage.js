@@ -68,7 +68,6 @@ export default function SalesPage() {
     if (r.ok) fetchSales();
   }
 
-  // --- Excel Upload ---
   const handleFileChange = (e) => {
     setFile(e.target.files[0]);
   };
@@ -102,7 +101,7 @@ export default function SalesPage() {
       <main className="app-container mt-6">
         {/* Record or Edit sale */}
         <div className="card">
-          <h3 className="text-lg font-semibold">{editingId ? "Edit sale" : "Record sale"}</h3>
+          <h3 className="text-lg font-semibold">{editingId ? "Edit Sale" : "Record Sale"}</h3>
           <form onSubmit={submit} className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-4">
             
             <div>
