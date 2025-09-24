@@ -7,7 +7,7 @@ export default function SalesPage() {
   const [items, setItems] = useState([]);
   const [form, setForm] = useState({ itemId: "", quantity: 1, customer: "" });
   const [sales, setSales] = useState([]);
-  const token = localStorage.getItem("token");
+  const [editingId, setEditingId] = useState(null);
 
   useEffect(() => {
     fetchItems();
@@ -15,6 +15,7 @@ export default function SalesPage() {
   }, []);
 
   async function fetchItems() {
+    const token = localStorage.getItem("token");
     const r = await fetch(`${API}/inventory`, {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -22,6 +23,7 @@ export default function SalesPage() {
   }
 
   async function fetchSales() {
+    const token = localStorage.getItem("token");
     const r = await fetch(`${API}/sales`, {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -30,65 +32,98 @@ export default function SalesPage() {
 
   async function submit(e) {
     e.preventDefault();
-    const r = await fetch(`${API}/sales`, {
-      method: "POST",
+    const token = localStorage.getItem("token");
+
+    const url = editingId ? `${API}/sales/${editingId}` : `${API}/sales`;
+    const method = editingId ? "PUT" : "POST";
+
+    const r = await fetch(url, {
+      method,
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(form),
     });
-    const d = await r.json();
-    if (!r.ok) return alert(d.message || "Error");
+
+    const data = await r.json();
+    if (!r.ok) return alert(data.message || "Failed");
 
     setForm({ itemId: "", quantity: 1, customer: "" });
+    setEditingId(null);
     fetchItems();
     fetchSales();
   }
 
-  async function uploadExcel(e) {
-    const file = e.target.files[0];
+  function startEdit(sale) {
+    setForm({
+      itemId: sale.itemId,
+      quantity: sale.quantity,
+      customer: sale.customer,
+    });
+    setEditingId(sale.id);
+  }
+
+  function cancelEdit() {
+    setForm({ itemId: "", quantity: 1, customer: "" });
+    setEditingId(null);
+  }
+
+  async function remove(id) {
+    if (!window.confirm("Delete this sale?")) return;
+    const token = localStorage.getItem("token");
+    const r = await fetch(`${API}/sales/${id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (r.ok) fetchSales();
+  }
+
+    async function uploadFile(e) {
+    e.preventDefault();
+    const file = e.target.file.files[0];
     if (!file) return;
 
     const formData = new FormData();
     formData.append("file", file);
 
-    const r = await fetch(`${API}/sales/upload-excel`, {
-      method: "POST",
-      body: formData,
-      headers: { Authorization: `Bearer ${token}` },
+    const token = localStorage.getItem("token");
+    const r = await fetch(`${API}/sales/upload`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
     });
 
-    const d = await r.json();
-    if (!r.ok) return alert(d.message || "Upload failed");
-
-    alert("✅ Excel uploaded successfully!");
-    fetchItems();
+    const data = await r.json();
+    if (!r.ok) return alert(data.message || "Upload failed");
+    alert(data.message || "Upload complete");
     fetchSales();
-  }
+    }
 
   return (
     <div>
       <NavBar />
       <main className="app-container mt-6">
-        <h2 className="text-xl font-semibold mb-4">Sales</h2>
-
-        {/* Record sale form */}
+        {/* Record or Edit sale */}
         <div className="card">
-          <h3 className="font-medium mb-2">Record sale</h3>
+          <h3 className="text-lg font-semibold">
+            {editingId ? "Edit sale" : "Record sale"}
+          </h3>
           <form
             onSubmit={submit}
             className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-4"
           >
             <div>
-              <label className="block text-sm text-slate-600 mb-1">Item</label>
+              <label className="block text-sm font-medium text-slate-600 mb-1">
+                Item
+              </label>
               <select
                 className="w-full border rounded px-3 py-2"
+                required
                 value={form.itemId}
                 onChange={(e) =>
                   setForm({ ...form, itemId: e.target.value })
                 }
-                required
               >
                 <option value="">Select item</option>
                 {items.map((i) => (
@@ -100,25 +135,22 @@ export default function SalesPage() {
             </div>
 
             <div>
-              <label className="block text-sm text-slate-600 mb-1">
+              <label className="block text-sm font-medium text-slate-600 mb-1">
                 Quantity
               </label>
               <input
                 type="number"
-                min="1"
                 className="w-full border rounded px-3 py-2"
+                min="1"
                 value={form.quantity}
                 onChange={(e) =>
-                  setForm({
-                    ...form,
-                    quantity: parseInt(e.target.value || 1),
-                  })
+                  setForm({ ...form, quantity: parseInt(e.target.value || 1) })
                 }
               />
             </div>
 
             <div>
-              <label className="block text-sm text-slate-600 mb-1">
+              <label className="block text-sm font-medium text-slate-600 mb-1">
                 Customer
               </label>
               <input
@@ -131,51 +163,77 @@ export default function SalesPage() {
               />
             </div>
 
-            <div className="md:col-span-3">
+            <div className="md:col-span-3 flex gap-2">
               <button className="bg-accent text-white px-4 py-2 rounded w-full">
-                Record Sale
+                {editingId ? "Update" : "Record"}
               </button>
+              {editingId && (
+                <button
+                  type="button"
+                  onClick={cancelEdit}
+                  className="bg-slate-300 px-4 py-2 rounded w-full"
+                >
+                  Cancel
+                </button>
+              )}
             </div>
+          </form>
+
+          {/* Upload Excel file */}
+          <form onSubmit={uploadFile} className="mt-4 flex gap-2 items-center">
+            <input type="file" name="file" accept=".xlsx,.xls" required />
+            <button className="bg-emerald-600 text-white px-4 py-2 rounded">
+              Upload
+            </button>
           </form>
         </div>
 
-        {/* Upload Excel */}
+        {/* Recent sales */}
         <div className="card mt-4">
-          <h3 className="font-medium mb-2">Bulk Upload</h3>
-          <input type="file" accept=".xlsx,.xls" onChange={uploadExcel} />
-        </div>
-
-        {/* Recent sales table */}
-        <div className="card mt-4">
-          <h3 className="font-medium mb-2">Recent Sales</h3>
+          <h3 className="font-medium mb-2">Recent sales</h3>
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-left">
+            <table className="w-full text-left border-collapse">
               <thead className="bg-slate-100 text-slate-600 text-sm">
                 <tr>
-                  <th className="px-3 py-2">Date</th>
-                  <th className="px-3 py-2">Item</th>
-                  <th className="px-3 py-2">Qty</th>
-                  <th className="px-3 py-2">Total</th>
-                  <th className="px-3 py-2">Customer</th>
+                  <th className="py-2 px-3">Date</th>
+                  <th className="py-2 px-3">Item</th>
+                  <th className="py-2 px-3">Qty</th>
+                  <th className="py-2 px-3">Total</th>
+                  <th className="py-2 px-3">Customer</th>
+                  <th className="py-2 px-3">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {sales.map((s) => (
                   <tr key={s.id} className="border-t">
-                    <td className="px-3 py-2">{s.date}</td>
-                    <td className="px-3 py-2">{s.Item?.name || "—"}</td>
-                    <td className="px-3 py-2">{s.quantity}</td>
-                    <td className="px-3 py-2">
+                    <td className="py-2 px-3">{s.date}</td>
+                    <td className="py-2 px-3">{s.Item?.name || "—"}</td>
+                    <td className="py-2 px-3">{s.quantity}</td>
+                    <td className="py-2 px-3">
                       ₱{Number(s.totalPrice).toFixed(2)}
                     </td>
-                    <td className="px-3 py-2">{s.customer}</td>
+                    <td className="py-2 px-3">{s.customer}</td>
+                    <td className="py-2 px-3 flex gap-2">
+                      <button
+                        onClick={() => startEdit(s)}
+                        className="text-blue-600 text-sm"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => remove(s.id)}
+                        className="text-rose-600 text-sm"
+                      >
+                        Delete
+                      </button>
+                    </td>
                   </tr>
                 ))}
                 {!sales.length && (
                   <tr>
                     <td
-                      colSpan="5"
-                      className="text-center py-3 text-slate-500"
+                      colSpan="6"
+                      className="py-3 text-center text-slate-500"
                     >
                       No sales yet
                     </td>

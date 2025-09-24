@@ -1,12 +1,11 @@
 const express = require("express");
 const multer = require("multer");
 const xlsx = require("xlsx");
-const { Sale, Item, sequelize } = require("../models");
+const { Sale, Item, sequelize } = require("../models"); 
 
 const router = express.Router();
 const upload = multer({ dest: "uploads/" });
 
-// Get all sales
 router.get("/", async (req, res) => {
   try {
     const sales = await Sale.findAll({
@@ -20,7 +19,6 @@ router.get("/", async (req, res) => {
   }
 });
 
-// Create sale
 router.post("/", async (req, res) => {
   try {
     const { itemId, quantity, customer } = req.body;
@@ -47,7 +45,6 @@ router.post("/", async (req, res) => {
   }
 });
 
-// Update sale
 router.put("/:id", async (req, res) => {
   try {
     const sale = await Sale.findByPk(req.params.id);
@@ -67,7 +64,6 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-// Delete sale
 router.delete("/:id", async (req, res) => {
   try {
     const sale = await Sale.findByPk(req.params.id);
@@ -81,8 +77,7 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
-// Upload sales via Excel
-router.post("/upload-excel", upload.single("file"), async (req, res) => {
+router.post("/upload", upload.single("file"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
@@ -94,47 +89,33 @@ router.post("/upload-excel", upload.single("file"), async (req, res) => {
       new Date(Math.round((serial - 25569) * 86400 * 1000));
 
     for (const row of rows) {
-      const itemName = row.Item;
-      const qty = Number(row.Quantity) || 0;
-      const price = Number(row.Price) || 0;
-      const customer = row.Customer || "";
+      let item = await Item.findOne({ where: { name: row.Item } });
+      if (!item) {
+        item = await Item.create({
+          name: row.Item,
+          quantity: 0,
+          price: row.Price || 0,
+        });
+        console.log(`Created new item: ${row.Item}`);
+      }
 
-      // Parse Date properly
-      let saleDate;
-      if (!row.Date) {
-        saleDate = new Date();
-      } else if (row.Date instanceof Date) {
+      let saleDate = new Date();
+      if (row.Date instanceof Date) {
         saleDate = row.Date;
       } else if (typeof row.Date === "number") {
         saleDate = excelSerialToJSDate(row.Date);
-      } else {
+      } else if (typeof row.Date === "string") {
         const parsed = new Date(row.Date);
-        saleDate = isNaN(parsed.getTime()) ? new Date() : parsed;
+        if (!isNaN(parsed.getTime())) saleDate = parsed;
       }
 
-      // Ensure Item exists
-      let item = await Item.findOne({ where: { name: itemName } });
-      if (!item) {
-        item = await Item.create({
-          name: itemName,
-          quantity: 0,
-          price: price || 0,
-        });
-        console.log(`Created new item: ${itemName}`);
-      }
-
-      // Save sale with correct total
       await Sale.create({
         itemId: item.id,
-        quantity: qty,
-        totalPrice: qty * price,
-        customer,
+        quantity: Number(row.Quantity) || 0,
+        totalPrice: Number(row.Price) * (Number(row.Quantity) || 0),
+        customer: row.Customer || "",
         date: saleDate,
       });
-
-      console.log(
-        `✅ Added sale: ${itemName} x${qty} (₱${qty * price}) on ${saleDate.toISOString().slice(0, 10)}`
-      );
     }
 
     res.json({ message: "File uploaded and sales added successfully" });
@@ -144,12 +125,11 @@ router.post("/upload-excel", upload.single("file"), async (req, res) => {
   }
 });
 
-// Monthly sales report
 router.get("/reports/monthly", async (req, res) => {
   try {
     const results = await Sale.findAll({
       attributes: [
-        [sequelize.fn("strftime", "%Y-%m", sequelize.col("date")), "month"], // SQLite
+        [sequelize.fn("strftime", "%Y-%m", sequelize.col("date")), "month"], 
         [sequelize.fn("SUM", sequelize.col("totalPrice")), "total"],
       ],
       group: ["month"],
@@ -162,5 +142,6 @@ router.get("/reports/monthly", async (req, res) => {
     res.status(500).json({ message: "Failed to fetch monthly sales" });
   }
 });
+
 
 module.exports = router;
